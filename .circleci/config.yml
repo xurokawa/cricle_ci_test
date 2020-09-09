@@ -2,31 +2,32 @@ version: 2.1
 jobs:
   build:
     docker:
-      - image: circleci/ruby:2.6.5
+      - image: circleci/ruby:2.6.5-node
         environment:
           BUNDLE_JOBS: 3
           BUNDLE_RETRY: 3
           BUNDLE_PATH: vendor/bundle
           PGHOST: 127.0.0.1
-          PGUSER: circleci-demo-ruby
+          PGUSER: postgres
           RAILS_ENV: test
       - image: circleci/postgres:9.5-alpine # データベース イメージ
         environment: # データベースの環境変数
-          POSTGRES_USER: user
-          POSTGRES_DB: ci_test
+          POSTGRES_USER: postgres
+          POSTGRES_DB: ci_test_test
           POSTGRES_PASSWORD: "password"
     steps:
       - checkout
       - run:
-          name: Bundlerの指定
-          command: bin/bundle -v
+          name: Bundler install
+          command: |
+            gem update --system
+            gem install bundler -v 2.1.4
+      - run: bundle -v
       - restore_cache:
           keys:
-            - ci_test-{{ checksum "Gemfile.lock" }}
-            - ci_test-
-      - run:
-          name: Bundle Install
-          command: bin/bundle check --path vendor/bundle || bin/bundle install --deployment
+            - ci_test_1-{{ checksum "Gemfile.lock" }}
+      - run: bundle config set path 'vendor/bundle'
+      - run: bundle install
 
       - save_cache:
           key: rails-demo-bundle-v2-{{ checksum "Gemfile.lock" }}
@@ -36,7 +37,6 @@ jobs:
       - restore_cache:
           keys:
             - rails-demo-yarn-{{ checksum "yarn.lock" }}
-            - rails-demo-yarn-
 
       - run:
           name: Yarn のインストール
@@ -53,20 +53,20 @@ jobs:
 
       - run:
           name: データベースのセットアップ
-          command: bin/rails db:schema:load --trace
+          command: bin/rails db:create db:schema:load --trace
 
       - run:
-          name: RSpec の並列実行
+          name: RSpec 実行
           command: |
-            bundle exec rspec --profile 10 \
-                              --format RspecJunitFormatter \
-                              --out test_results/rspec.xml \
-                              --format progress \
-                              $(circleci tests glob "spec/**/*_spec.rb" | circleci tests split --split-by=timings)
+            bundle exec rspec
 
+      - run:
+          name: Rubocop 実行
+          command: |
+            bundle exec rubocop
 
-      - store_test_results: # テスト サマリー (https://circleci.com/ja/docs/2.0/collect-test-data/) に表示するテスト結果をアップロードします
-          path: test_results
+#      - store_test_results: # テスト サマリー (https://circleci.com/ja/docs/2.0/collect-test-data/) に表示するテスト結果をアップロードします
+#          path: test_results
 workflows:
   version: 2
   build_and_spec:
