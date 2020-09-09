@@ -69,6 +69,6 @@ jobs:
           path: test_results
 workflows:
   version: 2
-  one_and_two:
+  build_and_spec:
     jobs:
       - build
