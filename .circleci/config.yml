@@ -66,8 +66,21 @@ jobs:
 
 #      - store_test_results: # テスト サマリー (https://circleci.com/ja/docs/2.0/collect-test-data/) に表示するテスト結果をアップロードします
 #          path: test_results
+  test:
+    docker:
+      - image: circleci/ruby:2.6.5-node
+        environment:
+          BUNDLE_JOBS: 3
+          BUNDLE_RETRY: 3
+          BUNDLE_PATH: vendor/bundle
+          PGHOST: 127.0.0.1
+          PGUSER: postgres
+          RAILS_ENV: test
+    steps:
+      - run: echo 'run test'
 workflows:
   version: 2
   build_and_spec:
     jobs:
       - build
+      - test
