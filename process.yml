@@ -33,16 +33,13 @@ jobs:
         key: ci_test_2-{{ checksum "Gemfile.lock" }}
         paths:
         - .vendor/bundle
-    - restore_cache:
-        keys:
-        - rails-demo-yarn-{{ checksum "yarn.lock" }}
     - run:
-        name: Yarn のインストール
-        command: yarn install --cache-folder ~/.cache/yarn
-    - save_cache:
-        key: rails-demo-yarn-{{ checksum "yarn.lock" }}
-        paths:
-        - ~/.cache/yarn
+        name: npm のインストール
+        command: npm install
+    - run:
+        name: jest
+        command: |
+          npm run test
     - run:
         name: DB の待機
         command: dockerize -wait tcp://localhost:5432 -timeout 1m
@@ -116,18 +113,27 @@ workflows:
 #           paths:
 #             - .vendor/bundle
 # 
-#       - restore_cache:
-#           keys:
-#             - rails-demo-yarn-{{ checksum \"yarn.lock\" }}
+# #      - restore_cache:
+# #          keys:
+# #            - rails-demo-yarn-{{ checksum \"yarn.lock\" }}
+# 
+# #      - run:
+# #          name: Yarn \u306E\u30A4\u30F3\u30B9\u30C8\u30FC\u30EB
+# #          command: yarn install --cache-folder ~/.cache/yarn
 # 
 #       - run:
-#           name: Yarn \u306E\u30A4\u30F3\u30B9\u30C8\u30FC\u30EB
-#           command: yarn install --cache-folder ~/.cache/yarn
+#           name: npm \u306E\u30A4\u30F3\u30B9\u30C8\u30FC\u30EB
+#           command: npm install
 # 
-#       - save_cache:
-#           key: rails-demo-yarn-{{ checksum \"yarn.lock\" }}
-#           paths:
-#             - ~/.cache/yarn
+#       - run:
+#           name: jest
+#           command: |
+#             npm run test
+# 
+# #      - save_cache:
+# #          key: rails-demo-yarn-{{ checksum \"yarn.lock\" }}
+# #          paths:
+# #            - ~/.cache/yarn
 # 
 #       - run:
 #           name: DB \u306E\u5F85\u6A5F
@@ -162,6 +168,7 @@ workflows:
 #           name: jest
 #           command: |
 #             npm run test
+# 
 # workflows:
 #   version: 2
 #   build_and_spec:

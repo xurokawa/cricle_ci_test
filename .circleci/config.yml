@@ -34,18 +34,14 @@ jobs:
           paths:
             - .vendor/bundle
 
-      - restore_cache:
-          keys:
-            - rails-demo-yarn-{{ checksum "yarn.lock" }}
+      - run:
+          name: npm のインストール
+          command: npm install
 
       - run:
-          name: Yarn のインストール
-          command: yarn install --cache-folder ~/.cache/yarn
-
-      - save_cache:
-          key: rails-demo-yarn-{{ checksum "yarn.lock" }}
-          paths:
-            - ~/.cache/yarn
+          name: jest
+          command: |
+            npm run test
 
       - run:
           name: DB の待機
@@ -86,4 +82,4 @@ workflows:
   build_and_spec:
     jobs:
       - build
-      - frontend
+#      - frontend
