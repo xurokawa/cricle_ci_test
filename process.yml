@@ -26,15 +26,13 @@ jobs:
         command: bundle -v
     - restore_cache:
         keys:
-        - ci_test_1-{{ checksum "Gemfile.lock" }}
+        - ci_test_2-{{ checksum "Gemfile.lock" }}
     - run:
-        command: bundle config set path 'vendor/bundle'
-    - run:
-        command: bundle install
+        command: bundle install --jobs=3 --retry=3 --deployment --path=./vendor/bundle
     - save_cache:
-        key: rails-demo-bundle-v2-{{ checksum "Gemfile.lock" }}
+        key: ci_test_2-{{ checksum "Gemfile.lock" }}
         paths:
-        - vendor/bundle
+        - .vendor/bundle
     - restore_cache:
         keys:
         - rails-demo-yarn-{{ checksum "yarn.lock" }}
@@ -59,11 +57,27 @@ jobs:
         name: Rubocop 実行
         command: |
           bundle exec rubocop
+    - store_test_results:
+        path: test_results
+  frontend:
+    docker:
+    - image: circleci/node:12.16.2-stretch
+    steps:
+    - checkout
+    - run:
+        name: npm install
+        command: |
+          npm install
+    - run:
+        name: jest
+        command: |
+          npm run test
 workflows:
   version: 2
   build_and_spec:
     jobs:
     - build
+    - frontend
 
 # Original config.yml file:
 # version: 2.1
@@ -93,14 +107,14 @@ workflows:
 #       - run: bundle -v
 #       - restore_cache:
 #           keys:
-#             - ci_test_1-{{ checksum \"Gemfile.lock\" }}
-#       - run: bundle config set path 'vendor/bundle'
-#       - run: bundle install
+#             - ci_test_2-{{ checksum \"Gemfile.lock\" }}
+# 
+#       - run: bundle install --jobs=3 --retry=3 --deployment --path=./vendor/bundle
 # 
 #       - save_cache:
-#           key: rails-demo-bundle-v2-{{ checksum \"Gemfile.lock\" }}
+#           key: ci_test_2-{{ checksum \"Gemfile.lock\" }}
 #           paths:
-#             - vendor/bundle
+#             - .vendor/bundle
 # 
 #       - restore_cache:
 #           keys:
@@ -133,10 +147,24 @@ workflows:
 #           command: |
 #             bundle exec rubocop
 # 
-# #      - store_test_results: # \u30C6\u30B9\u30C8 \u30B5\u30DE\u30EA\u30FC (https://circleci.com/ja/docs/2.0/collect-test-data/) \u306B\u8868\u793A\u3059\u308B\u30C6\u30B9\u30C8\u7D50\u679C\u3092\u30A2\u30C3\u30D7\u30ED\u30FC\u30C9\u3057\u307E\u3059
-# #          path: test_results
+#       - store_test_results: # \u30C6\u30B9\u30C8 \u30B5\u30DE\u30EA\u30FC (https://circleci.com/ja/docs/2.0/collect-test-data/) \u306B\u8868\u793A\u3059\u308B\u30C6\u30B9\u30C8\u7D50\u679C\u3092\u30A2\u30C3\u30D7\u30ED\u30FC\u30C9\u3057\u307E\u3059
+#           path: test_results
+#   frontend:
+#     docker:
+#       - image: circleci/node:12.16.2-stretch
+#     steps:
+#       - checkout
+#       - run:
+#           name: npm install
+#           command: |
+#             npm install
+#       - run:
+#           name: jest
+#           command: |
+#             npm run test
 # workflows:
 #   version: 2
 #   build_and_spec:
 #     jobs:
 #       - build
+#       - frontend
