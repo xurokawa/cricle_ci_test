@@ -65,8 +65,8 @@ jobs:
           command: |
             bundle exec rubocop
 
-#      - store_test_results: # テスト サマリー (https://circleci.com/ja/docs/2.0/collect-test-data/) に表示するテスト結果をアップロードします
-#          path: test_results
+      - store_test_results: # テスト サマリー (https://circleci.com/ja/docs/2.0/collect-test-data/) に表示するテスト結果をアップロードします
+          path: test_results
   test:
     docker:
       - image: circleci/ruby:2.6.5-node
@@ -84,4 +84,3 @@ workflows:
   build_and_spec:
     jobs:
       - build
-      - test
