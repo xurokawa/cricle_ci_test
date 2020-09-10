@@ -25,14 +25,14 @@ jobs:
       - run: bundle -v
       - restore_cache:
           keys:
-            - ci_test_1-{{ checksum "Gemfile.lock" }}
-      - run: bundle config set path 'vendor/bundle'
-      - run: bundle install
+            - ci_test_2-{{ checksum "Gemfile.lock" }}
+
+      - run: bundle install --jobs=3 --retry=3 --deployment --path=./vendor/bundle
 
       - save_cache:
-          key: rails-demo-bundle-v2-{{ checksum "Gemfile.lock" }}
+          key: ci_test_2-{{ checksum "Gemfile.lock" }}
           paths:
-            - vendor/bundle
+            - .vendor/bundle
 
       - restore_cache:
           keys:
@@ -65,8 +65,20 @@ jobs:
           command: |
             bundle exec rubocop
 
-#      - store_test_results: # テスト サマリー (https://circleci.com/ja/docs/2.0/collect-test-data/) に表示するテスト結果をアップロードします
-#          path: test_results
+      - store_test_results: # テスト サマリー (https://circleci.com/ja/docs/2.0/collect-test-data/) に表示するテスト結果をアップロードします
+          path: test_results
+  test:
+    docker:
+      - image: circleci/ruby:2.6.5-node
+        environment:
+          BUNDLE_JOBS: 3
+          BUNDLE_RETRY: 3
+          BUNDLE_PATH: vendor/bundle
+          PGHOST: 127.0.0.1
+          PGUSER: postgres
+          RAILS_ENV: test
+    steps:
+      - run: echo 'run test'
 workflows:
   version: 2
   build_and_spec:
