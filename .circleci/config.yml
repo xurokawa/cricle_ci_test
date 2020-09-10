@@ -26,13 +26,12 @@ jobs:
       - restore_cache:
           keys:
             - ci_test_1-{{ checksum "Gemfile.lock" }}
-      - run: bundle config set path 'vendor/bundle'
-      - run: bundle install
+      - run: bundle install --jobs=3 --retry=3 --deployment --path=./vendor/bundle
 
       - save_cache:
           key: rails-demo-bundle-v2-{{ checksum "Gemfile.lock" }}
           paths:
-            - vendor/bundle
+            - .vendor/bundle
 
       - restore_cache:
           keys:
