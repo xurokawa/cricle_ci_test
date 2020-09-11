@@ -1,47 +1,51 @@
 version: 2.1
-jobs:
-  build:
+executors:
+  app:
     docker:
       - image: circleci/ruby:2.6.5-node
         environment:
-          BUNDLE_JOBS: 3
-          BUNDLE_RETRY: 3
-          BUNDLE_PATH: vendor/bundle
-          PGHOST: 127.0.0.1
-          PGUSER: postgres
-          RAILS_ENV: test
-      - image: circleci/postgres:9.5-alpine # データベース イメージ
-        environment: # データベースの環境変数
-          POSTGRES_USER: postgres
-          POSTGRES_DB: ci_test_test
-          POSTGRES_PASSWORD: "password"
+            RAILS_ENV: test
+            PGHOST: 127.0.0.1
+            PGUSER: postgres
+      - image: circleci/postgres:9.5-alpine
+
+commands:
+  load_cache:
+    description: Restore bundle and node
     steps:
-      - checkout
+      - restore_cache:
+          name: Restoring Bundle Cache
+          key: cache-bundle-{{ checksum "Gemfile.lock" }}
+      - restore_cache:
+          name: Restoring Node Module Cache
+          key: cache-node_modules-{{ checksum "package-lock.json" }}
+  dump_cache:
+    description: Dump bundle and node
+    steps:
+      - save_cache:
+          name: Save Bundle Cache
+          key: cache-bundle-{{ checksum "Gemfile.lock" }}
+          paths:
+            - ./vendor/bundle
+      - save_cache:
+          name: Save Node Module Cache
+          key: cache-node_modules-{{ checksum "yarn.lock" }}
+          paths:
+            - ./node_modules
+  setup_test:
+    steps:
       - run:
           name: Bundler install
           command: |
             gem update --system
             gem install bundler -v 2.1.4
       - run: bundle -v
-      - restore_cache:
-          keys:
-            - ci_test_2-{{ checksum "Gemfile.lock" }}
 
       - run: bundle install --jobs=3 --retry=3 --deployment --path=./vendor/bundle
-
-      - save_cache:
-          key: ci_test_2-{{ checksum "Gemfile.lock" }}
-          paths:
-            - .vendor/bundle
 
       - run:
           name: npm のインストール
           command: npm install
-
-      - run:
-          name: jest
-          command: |
-            npm run test
 
       - run:
           name: DB の待機
@@ -51,35 +55,63 @@ jobs:
           name: データベースのセットアップ
           command: bin/rails db:create db:schema:load --trace
 
+      - store_test_results: # テスト サマリー (https://circleci.com/ja/docs/2.0/collect-test-data/) に表示するテスト結果をアップロードします
+          path: test_results
+  rspec:
+    steps:
       - run:
           name: RSpec 実行
           command: |
             bundle exec rspec
-
+  lint:
+    steps:
       - run:
           name: Rubocop 実行
           command: |
             bundle exec rubocop
-
-      - store_test_results: # テスト サマリー (https://circleci.com/ja/docs/2.0/collect-test-data/) に表示するテスト結果をアップロードします
-          path: test_results
-  frontend:
-    docker:
-      - image: circleci/node:12.16.2-stretch
+  jest:
     steps:
-      - checkout
-      - run:
-          name: npm install
-          command: |
-            npm install
       - run:
           name: jest
           command: |
             npm run test
+
+jobs:
+  build_and_test: # ローカル用
+    executor: app
+    steps:
+      - checkout
+      - load_cache
+      - setup_test
+      - dump_cache
+      - rspec
+      - lint
+      - jest
+  build:
+    executor: app
+    steps:
+      - checkout
+      - load_cache
+      - setup_test
+      - dump_cache
+  test:
+    executor: app
+    steps:
+      - rspec
+  lint:
+    executor: app
+    steps:
+      - lint
+      - jest
 
 workflows:
   version: 2
   build_and_spec:
     jobs:
       - build
-#      - frontend
+      - test:
+          requires:
+            - build
+      - lint:
+          requires:
+            - build

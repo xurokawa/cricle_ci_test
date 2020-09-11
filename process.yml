@@ -4,19 +4,18 @@ jobs:
     docker:
     - image: circleci/ruby:2.6.5-node
       environment:
-        BUNDLE_JOBS: 3
-        BUNDLE_RETRY: 3
-        BUNDLE_PATH: vendor/bundle
+        RAILS_ENV: test
         PGHOST: 127.0.0.1
         PGUSER: postgres
-        RAILS_ENV: test
     - image: circleci/postgres:9.5-alpine
-      environment:
-        POSTGRES_USER: postgres
-        POSTGRES_DB: ci_test_test
-        POSTGRES_PASSWORD: password
     steps:
     - checkout
+    - restore_cache:
+        name: Restoring Bundle Cache
+        key: cache-bundle-{{ checksum "Gemfile.lock" }}
+    - restore_cache:
+        name: Restoring Node Module Cache
+        key: cache-node_modules-{{ checksum "package-lock.json" }}
     - run:
         name: Bundler install
         command: |
@@ -24,47 +23,55 @@ jobs:
           gem install bundler -v 2.1.4
     - run:
         command: bundle -v
-    - restore_cache:
-        keys:
-        - ci_test_2-{{ checksum "Gemfile.lock" }}
     - run:
         command: bundle install --jobs=3 --retry=3 --deployment --path=./vendor/bundle
-    - save_cache:
-        key: ci_test_2-{{ checksum "Gemfile.lock" }}
-        paths:
-        - .vendor/bundle
     - run:
         name: npm のインストール
         command: npm install
-    - run:
-        name: jest
-        command: |
-          npm run test
     - run:
         name: DB の待機
         command: dockerize -wait tcp://localhost:5432 -timeout 1m
     - run:
         name: データベースのセットアップ
         command: bin/rails db:create db:schema:load --trace
+    - store_test_results:
+        path: test_results
+    - save_cache:
+        name: Save Bundle Cache
+        key: cache-bundle-{{ checksum "Gemfile.lock" }}
+        paths:
+        - ./vendor/bundle
+    - save_cache:
+        name: Save Node Module Cache
+        key: cache-node_modules-{{ checksum "yarn.lock" }}
+        paths:
+        - ./node_modules
+  test:
+    docker:
+    - image: circleci/ruby:2.6.5-node
+      environment:
+        RAILS_ENV: test
+        PGHOST: 127.0.0.1
+        PGUSER: postgres
+    - image: circleci/postgres:9.5-alpine
+    steps:
     - run:
         name: RSpec 実行
         command: |
           bundle exec rspec
+  lint:
+    docker:
+    - image: circleci/ruby:2.6.5-node
+      environment:
+        RAILS_ENV: test
+        PGHOST: 127.0.0.1
+        PGUSER: postgres
+    - image: circleci/postgres:9.5-alpine
+    steps:
     - run:
         name: Rubocop 実行
         command: |
           bundle exec rubocop
-    - store_test_results:
-        path: test_results
-  frontend:
-    docker:
-    - image: circleci/node:12.16.2-stretch
-    steps:
-    - checkout
-    - run:
-        name: npm install
-        command: |
-          npm install
     - run:
         name: jest
         command: |
@@ -74,66 +81,62 @@ workflows:
   build_and_spec:
     jobs:
     - build
-    - frontend
+    - test:
+        requires:
+        - build
+    - lint:
+        requires:
+        - build
 
 # Original config.yml file:
 # version: 2.1
-# jobs:
-#   build:
+# executors:
+#   app:
 #     docker:
 #       - image: circleci/ruby:2.6.5-node
 #         environment:
-#           BUNDLE_JOBS: 3
-#           BUNDLE_RETRY: 3
-#           BUNDLE_PATH: vendor/bundle
-#           PGHOST: 127.0.0.1
-#           PGUSER: postgres
-#           RAILS_ENV: test
-#       - image: circleci/postgres:9.5-alpine # \u30C7\u30FC\u30BF\u30D9\u30FC\u30B9 \u30A4\u30E1\u30FC\u30B8
-#         environment: # \u30C7\u30FC\u30BF\u30D9\u30FC\u30B9\u306E\u74B0\u5883\u5909\u6570
-#           POSTGRES_USER: postgres
-#           POSTGRES_DB: ci_test_test
-#           POSTGRES_PASSWORD: \"password\"
+#             RAILS_ENV: test
+#             PGHOST: 127.0.0.1
+#             PGUSER: postgres
+#       - image: circleci/postgres:9.5-alpine
+# 
+# commands:
+#   load_cache:
+#     description: Restore bundle and node
 #     steps:
-#       - checkout
+#       - restore_cache:
+#           name: Restoring Bundle Cache
+#           key: cache-bundle-{{ checksum \"Gemfile.lock\" }}
+#       - restore_cache:
+#           name: Restoring Node Module Cache
+#           key: cache-node_modules-{{ checksum \"package-lock.json\" }}
+#   dump_cache:
+#     description: Dump bundle and node
+#     steps:
+#       - save_cache:
+#           name: Save Bundle Cache
+#           key: cache-bundle-{{ checksum \"Gemfile.lock\" }}
+#           paths:
+#             - ./vendor/bundle
+#       - save_cache:
+#           name: Save Node Module Cache
+#           key: cache-node_modules-{{ checksum \"yarn.lock\" }}
+#           paths:
+#             - ./node_modules
+#   setup_test:
+#     steps:
 #       - run:
 #           name: Bundler install
 #           command: |
 #             gem update --system
 #             gem install bundler -v 2.1.4
 #       - run: bundle -v
-#       - restore_cache:
-#           keys:
-#             - ci_test_2-{{ checksum \"Gemfile.lock\" }}
 # 
 #       - run: bundle install --jobs=3 --retry=3 --deployment --path=./vendor/bundle
-# 
-#       - save_cache:
-#           key: ci_test_2-{{ checksum \"Gemfile.lock\" }}
-#           paths:
-#             - .vendor/bundle
-# 
-# #      - restore_cache:
-# #          keys:
-# #            - rails-demo-yarn-{{ checksum \"yarn.lock\" }}
-# 
-# #      - run:
-# #          name: Yarn \u306E\u30A4\u30F3\u30B9\u30C8\u30FC\u30EB
-# #          command: yarn install --cache-folder ~/.cache/yarn
 # 
 #       - run:
 #           name: npm \u306E\u30A4\u30F3\u30B9\u30C8\u30FC\u30EB
 #           command: npm install
-# 
-#       - run:
-#           name: jest
-#           command: |
-#             npm run test
-# 
-# #      - save_cache:
-# #          key: rails-demo-yarn-{{ checksum \"yarn.lock\" }}
-# #          paths:
-# #            - ~/.cache/yarn
 # 
 #       - run:
 #           name: DB \u306E\u5F85\u6A5F
@@ -143,35 +146,63 @@ workflows:
 #           name: \u30C7\u30FC\u30BF\u30D9\u30FC\u30B9\u306E\u30BB\u30C3\u30C8\u30A2\u30C3\u30D7
 #           command: bin/rails db:create db:schema:load --trace
 # 
+#       - store_test_results: # \u30C6\u30B9\u30C8 \u30B5\u30DE\u30EA\u30FC (https://circleci.com/ja/docs/2.0/collect-test-data/) \u306B\u8868\u793A\u3059\u308B\u30C6\u30B9\u30C8\u7D50\u679C\u3092\u30A2\u30C3\u30D7\u30ED\u30FC\u30C9\u3057\u307E\u3059
+#           path: test_results
+#   rspec:
+#     steps:
 #       - run:
 #           name: RSpec \u5B9F\u884C
 #           command: |
 #             bundle exec rspec
-# 
+#   lint:
+#     steps:
 #       - run:
 #           name: Rubocop \u5B9F\u884C
 #           command: |
 #             bundle exec rubocop
-# 
-#       - store_test_results: # \u30C6\u30B9\u30C8 \u30B5\u30DE\u30EA\u30FC (https://circleci.com/ja/docs/2.0/collect-test-data/) \u306B\u8868\u793A\u3059\u308B\u30C6\u30B9\u30C8\u7D50\u679C\u3092\u30A2\u30C3\u30D7\u30ED\u30FC\u30C9\u3057\u307E\u3059
-#           path: test_results
-#   frontend:
-#     docker:
-#       - image: circleci/node:12.16.2-stretch
+#   jest:
 #     steps:
-#       - checkout
-#       - run:
-#           name: npm install
-#           command: |
-#             npm install
 #       - run:
 #           name: jest
 #           command: |
 #             npm run test
+# 
+# jobs:
+#   build_and_test: # \u30ED\u30FC\u30AB\u30EB\u7528
+#     executor: app
+#     steps:
+#       - checkout
+#       - load_cache
+#       - setup_test
+#       - dump_cache
+#       - rspec
+#       - lint
+#       - jest
+#   build:
+#     executor: app
+#     steps:
+#       - checkout
+#       - load_cache
+#       - setup_test
+#       - dump_cache
+#   test:
+#     executor: app
+#     steps:
+#       - rspec
+#   lint:
+#     executor: app
+#     steps:
+#       - lint
+#       - jest
 # 
 # workflows:
 #   version: 2
 #   build_and_spec:
 #     jobs:
 #       - build
-#       - frontend
+#       - test:
+#           requires:
+#             - build
+#       - lint:
+#           requires:
+#             - build
