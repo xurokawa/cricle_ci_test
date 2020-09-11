@@ -100,16 +100,16 @@ jobs:
     executor: app
     steps:
       - checkout
-      - bundler_install
       - load_cache
+      - bundler_install
       - setup_db
       - rspec
   lint:
     executor: app
     steps:
       - checkout
-      - bundler_install
       - load_cache
+      - bundler_install
       - lint
       - jest
 
