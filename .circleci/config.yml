@@ -34,18 +34,14 @@ jobs:
           paths:
             - .vendor/bundle
 
-      - restore_cache:
-          keys:
-            - rails-demo-yarn-{{ checksum "yarn.lock" }}
+      - run:
+          name: npm のインストール
+          command: npm install
 
       - run:
-          name: Yarn のインストール
-          command: yarn install --cache-folder ~/.cache/yarn
-
-      - save_cache:
-          key: rails-demo-yarn-{{ checksum "yarn.lock" }}
-          paths:
-            - ~/.cache/yarn
+          name: jest
+          command: |
+            npm run test
 
       - run:
           name: DB の待機
@@ -67,20 +63,23 @@ jobs:
 
       - store_test_results: # テスト サマリー (https://circleci.com/ja/docs/2.0/collect-test-data/) に表示するテスト結果をアップロードします
           path: test_results
-  test:
+  frontend:
     docker:
-      - image: circleci/ruby:2.6.5-node
-        environment:
-          BUNDLE_JOBS: 3
-          BUNDLE_RETRY: 3
-          BUNDLE_PATH: vendor/bundle
-          PGHOST: 127.0.0.1
-          PGUSER: postgres
-          RAILS_ENV: test
+      - image: circleci/node:12.16.2-stretch
     steps:
-      - run: echo 'run test'
+      - checkout
+      - run:
+          name: npm install
+          command: |
+            npm install
+      - run:
+          name: jest
+          command: |
+            npm run test
+
 workflows:
   version: 2
   build_and_spec:
     jobs:
       - build
+#      - frontend

@@ -1,5 +1,49 @@
 {
   "name": "ci_test",
   "private": true,
-  "dependencies": {}
+  "dependencies": {
+    "jest": "^26.4.2"
+  },
+  "scripts": {
+    "womock": "npm-run-all -p create-mock boot-mock",
+    "create-mock": "node ./dev/mock/weborder/merge_mock_json.js",
+    "boot-mock": "json-server --host 0.0.0.0 -p 3001 --watch ./dev/mock/weborder/mock.json  --routes dev/mock/weborder/routes.json --middlewares ./dev/mock/weborder/middlewares.js",
+    "test": "jest",
+    "build": "webpack",
+    "build_watch": "webpack -w",
+    "upgrade": "npm install -g npm",
+    "bundle": "npm install --no-save",
+    "bundle_update": "npm install",
+    "bundle_for_produciton": "npm install --no-save --production",
+    "lint": "eslint --ext .jsx --ext .es6 --ext .js --ext .tsx --ext .ts ./app/javascripts/",
+    "lint:tsx": "eslint --ext .tsx --ext .ts ./app/javascripts/",
+    "lint:jsx": "eslint --ext .jsx --ext .js ./app/javascripts/",
+    "lint:es6": "eslint --ext .es6 --ext .js ./app/javascripts/",
+    "lint:with_fix": "eslint --fix --debug --ext .jsx --ext .es6 --ext .tsx --ext .ts --ext .js ./app/javascripts/"
+  },
+  "jest": {
+    "rootDir": "./",
+    "testRegex": "(./spec/javascripts/.*|\\.(test|spec))\\.(jsx|es6|ts|tsx)$",
+    "transform": {
+      ".*": "./node_modules/babel-jest"
+    },
+    "unmockedModulePathPatterns": [
+      "react",
+      "test-helper"
+    ],
+    "moduleDirectories": [
+      "node_modules",
+      "app/javascripts"
+    ],
+    "moduleFileExtensions": [
+      "js",
+      "es6",
+      "jsx",
+      "ts",
+      "tsx"
+    ],
+    "moduleNameMapper": {
+      "\\.(css)$": "identity-obj-proxy"
+    }
+  }
 }
