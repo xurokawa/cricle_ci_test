@@ -7,6 +7,7 @@ executors:
             RAILS_ENV: test
             PGHOST: 127.0.0.1
             PGUSER: postgres
+            PARALLEL_TEST_PROCESSORS: 3
       - image: circleci/postgres:9.5-alpine
 
 commands:
@@ -32,6 +33,14 @@ commands:
           key: cache-node_modules-{{ checksum "package-lock.json" }}
           paths:
             - ./node_modules
+  update_node:
+    steps:
+      - run:
+          name: npm update
+          command: |
+            NODE_VERSION="v$(cat .node-version)"
+            curl -sSL "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-linux-x64.tar.xz" | sudo tar --strip-components=2 -xJ -C /usr/local/bin/ node-$NODE_VERSION-linux-x64/bin/node
+            curl -s https://www.npmjs.com/install.sh | sudo bash
   bundler_install:
     steps:
       - run:
@@ -45,24 +54,48 @@ commands:
       - run:
           name: npm のインストール
           command: npm install
-      - store_test_results: # テスト サマリー (https://circleci.com/ja/docs/2.0/collect-test-data/) に表示するテスト結果をアップロードします
-          path: test_results
   setup_db:
     steps:
       - run:
-          name: DB の待機
-          command: dockerize -wait tcp://localhost:5432 -timeout 1m
-
-      - run:
           name: データベースのセットアップ
-          command: bin/rails db:create db:schema:load --trace
+          command: bundle exec rake parallel:create parallel:migrate
+  checkout_merge:
+    steps:
+      - run:
+          name: 'Checkout merged branch'
+          command: |
+            if [[ -n "${CIRCLE_PULL_REQUEST}" ]]; then
+                # TODO: Any ways to get PR destination branch dynamically?
+                PR_DEST_BRANCH=master
 
+                # CIRCLE_PR_NUMBER is available only if PR is created from a fork (unavailable if created from a branch).
+                # So, manually construct it from CIRCLE_PULL_REQUEST environment variable.
+                CIRCLE_PR_NUMBER=$(basename "${CIRCLE_PULL_REQUEST}")
+
+                # Update PR refs for testing.
+                FETCH_REFS="+${PR_DEST_BRANCH}:${PR_DEST_BRANCH}"
+                FETCH_REFS="${FETCH_REFS} +refs/pull/${CIRCLE_PR_NUMBER}/head:pull/${CIRCLE_PR_NUMBER}/head"
+                FETCH_REFS="${FETCH_REFS} +refs/pull/${CIRCLE_PR_NUMBER}/merge:pull/${CIRCLE_PR_NUMBER}/merge"
+
+                # Retrieve the refs
+                echo "git fetch -u origin ${FETCH_REFS}"
+                git fetch -u origin ${FETCH_REFS}
+
+                # Checkout PR destination branch and merge PR head ref.
+                # If conflicts occur, exit with non-zero.
+                echo "git checkout ${PR_DEST_BRANCH}"
+                git checkout "${PR_DEST_BRANCH}"
+                git config user.name 'foo' # Need to configure something to git merge
+                git config user.email 'foo@example.com'
+                echo "git merge --no-commit \"pull/${CIRCLE_PR_NUMBER}/head\""
+                git merge --no-commit "pull/${CIRCLE_PR_NUMBER}/head"
+            fi
   rspec:
     steps:
       - run:
           name: RSpec 実行
           command: |
-            bundle exec rspec
+            bundle exec parallel_rspec --test-options '--order rand' spec
   lint:
     steps:
       - run:
@@ -74,6 +107,7 @@ commands:
       - run:
           name: jest
           command: |
+            node -v
             npm run test
 
 jobs:
@@ -82,9 +116,11 @@ jobs:
     steps:
       - checkout
       - load_cache
+      - update_node
       - bundler_install
       - setup_test
       - dump_cache
+      - setup_db
       - rspec
       - lint
       - jest
@@ -93,6 +129,7 @@ jobs:
     steps:
       - checkout
       - load_cache
+      - update_node
       - bundler_install
       - setup_test
       - dump_cache
@@ -112,11 +149,23 @@ jobs:
       - bundler_install
       - lint
       - jest
+  merge_test:
+    executor: app
+    steps:
+      - checkout
+      - checkout_merge
+      - load_cache
+      - bundler_install
+      - setup_db
+      - rspec
+      - lint
+      - jest
 
 workflows:
   version: 2
   build_and_spec:
     jobs:
+#      - build_and_test
       - build
       - test:
           requires:
@@ -124,3 +173,10 @@ workflows:
       - lint:
           requires:
             - build
+      - merge_test:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - master
