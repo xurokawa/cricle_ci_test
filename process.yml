@@ -22,8 +22,6 @@ jobs:
           gem update --system
           gem install bundler -v 2.1.4
     - run:
-        command: bundle -v
-    - run:
         command: bundle install --jobs=3 --retry=3 --deployment --path=./vendor/bundle
     - run:
         name: npm のインストール
@@ -43,7 +41,7 @@ jobs:
         - ./vendor/bundle
     - save_cache:
         name: Save Node Module Cache
-        key: cache-node_modules-{{ checksum "yarn.lock" }}
+        key: cache-node_modules-{{ checksum "package-lock.json" }}
         paths:
         - ./node_modules
   test:
@@ -55,6 +53,18 @@ jobs:
         PGUSER: postgres
     - image: circleci/postgres:9.5-alpine
     steps:
+    - checkout
+    - run:
+        name: Bundler install
+        command: |
+          gem update --system
+          gem install bundler -v 2.1.4
+    - restore_cache:
+        name: Restoring Bundle Cache
+        key: cache-bundle-{{ checksum "Gemfile.lock" }}
+    - restore_cache:
+        name: Restoring Node Module Cache
+        key: cache-node_modules-{{ checksum "package-lock.json" }}
     - run:
         name: RSpec 実行
         command: |
@@ -68,6 +78,18 @@ jobs:
         PGUSER: postgres
     - image: circleci/postgres:9.5-alpine
     steps:
+    - checkout
+    - run:
+        name: Bundler install
+        command: |
+          gem update --system
+          gem install bundler -v 2.1.4
+    - restore_cache:
+        name: Restoring Bundle Cache
+        key: cache-bundle-{{ checksum "Gemfile.lock" }}
+    - restore_cache:
+        name: Restoring Node Module Cache
+        key: cache-node_modules-{{ checksum "package-lock.json" }}
     - run:
         name: Rubocop 実行
         command: |
@@ -120,18 +142,18 @@ workflows:
 #             - ./vendor/bundle
 #       - save_cache:
 #           name: Save Node Module Cache
-#           key: cache-node_modules-{{ checksum \"yarn.lock\" }}
+#           key: cache-node_modules-{{ checksum \"package-lock.json\" }}
 #           paths:
 #             - ./node_modules
-#   setup_test:
+#   bundler_install:
 #     steps:
 #       - run:
 #           name: Bundler install
 #           command: |
 #             gem update --system
 #             gem install bundler -v 2.1.4
-#       - run: bundle -v
-# 
+#   setup_test:
+#     steps:
 #       - run: bundle install --jobs=3 --retry=3 --deployment --path=./vendor/bundle
 # 
 #       - run:
@@ -168,11 +190,12 @@ workflows:
 #             npm run test
 # 
 # jobs:
-#   build_and_test: # \u30ED\u30FC\u30AB\u30EB\u7528
+#   build_and_test: # \u30ED\u30FC\u30AB\u30EB\u3067\u5168\u90E8\u5B9F\u884C\u7528
 #     executor: app
 #     steps:
 #       - checkout
 #       - load_cache
+#       - bundler_install
 #       - setup_test
 #       - dump_cache
 #       - rspec
@@ -183,15 +206,22 @@ workflows:
 #     steps:
 #       - checkout
 #       - load_cache
+#       - bundler_install
 #       - setup_test
 #       - dump_cache
 #   test:
 #     executor: app
 #     steps:
+#       - checkout
+#       - bundler_install
+#       - load_cache
 #       - rspec
 #   lint:
 #     executor: app
 #     steps:
+#       - checkout
+#       - bundler_install
+#       - load_cache
 #       - lint
 #       - jest
 # 
