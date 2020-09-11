@@ -39,14 +39,16 @@ commands:
           command: |
             gem update --system
             gem install bundler -v 2.1.4
+      - run: bundle install --jobs=3 --retry=3 --deployment --path=./vendor/bundle
   setup_test:
     steps:
-      - run: bundle install --jobs=3 --retry=3 --deployment --path=./vendor/bundle
-
       - run:
           name: npm のインストール
           command: npm install
-
+      - store_test_results: # テスト サマリー (https://circleci.com/ja/docs/2.0/collect-test-data/) に表示するテスト結果をアップロードします
+          path: test_results
+  setup_db:
+    steps:
       - run:
           name: DB の待機
           command: dockerize -wait tcp://localhost:5432 -timeout 1m
@@ -55,8 +57,6 @@ commands:
           name: データベースのセットアップ
           command: bin/rails db:create db:schema:load --trace
 
-      - store_test_results: # テスト サマリー (https://circleci.com/ja/docs/2.0/collect-test-data/) に表示するテスト結果をアップロードします
-          path: test_results
   rspec:
     steps:
       - run:
@@ -102,6 +102,7 @@ jobs:
       - checkout
       - bundler_install
       - load_cache
+      - setup_db
       - rspec
   lint:
     executor: app
