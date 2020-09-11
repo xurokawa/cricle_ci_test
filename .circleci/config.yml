@@ -97,10 +97,14 @@ jobs:
   test:
     executor: app
     steps:
+      - checkout
+      - load_cache
       - rspec
   lint:
     executor: app
     steps:
+      - checkout
+      - load_cache
       - lint
       - jest
 
