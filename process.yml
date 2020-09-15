@@ -1,177 +1,440 @@
 version: 2
 jobs:
-  build:
+  build_and_test:
     docker:
     - image: circleci/ruby:2.6.5-node
       environment:
-        BUNDLE_JOBS: 3
-        BUNDLE_RETRY: 3
-        BUNDLE_PATH: vendor/bundle
+        RAILS_ENV: test
         PGHOST: 127.0.0.1
         PGUSER: postgres
-        RAILS_ENV: test
+        PARALLEL_TEST_PROCESSORS: 3
     - image: circleci/postgres:9.5-alpine
-      environment:
-        POSTGRES_USER: postgres
-        POSTGRES_DB: ci_test_test
-        POSTGRES_PASSWORD: password
     steps:
     - checkout
+    - restore_cache:
+        name: Restoring Bundle Cache
+        key: cache-bundle-{{ checksum "Gemfile.lock" }}
+    - restore_cache:
+        name: Restoring Node Module Cache
+        key: cache-node_modules-{{ checksum "package-lock.json" }}
+    - run:
+        name: npm update
+        command: |
+          NODE_VERSION="v$(cat .node-version)"
+          curl -sSL "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-linux-x64.tar.xz" | sudo tar --strip-components=2 -xJ -C /usr/local/bin/ node-$NODE_VERSION-linux-x64/bin/node
+          curl -s https://www.npmjs.com/install.sh | sudo bash
     - run:
         name: Bundler install
         command: |
           gem update --system
           gem install bundler -v 2.1.4
     - run:
-        command: bundle -v
-    - restore_cache:
-        keys:
-        - ci_test_2-{{ checksum "Gemfile.lock" }}
-    - run:
         command: bundle install --jobs=3 --retry=3 --deployment --path=./vendor/bundle
-    - save_cache:
-        key: ci_test_2-{{ checksum "Gemfile.lock" }}
-        paths:
-        - .vendor/bundle
     - run:
         name: npm のインストール
         command: npm install
-    - run:
-        name: jest
-        command: |
-          npm run test
-    - run:
-        name: DB の待機
-        command: dockerize -wait tcp://localhost:5432 -timeout 1m
+    - save_cache:
+        name: Save Bundle Cache
+        key: cache-bundle-{{ checksum "Gemfile.lock" }}
+        paths:
+        - ./vendor/bundle
+    - save_cache:
+        name: Save Node Module Cache
+        key: cache-node_modules-{{ checksum "package-lock.json" }}
+        paths:
+        - ./node_modules
     - run:
         name: データベースのセットアップ
-        command: bin/rails db:create db:schema:load --trace
+        command: bundle exec rake parallel:create parallel:migrate
     - run:
         name: RSpec 実行
         command: |
-          bundle exec rspec
+          bundle exec parallel_rspec --test-options '--order rand' spec
     - run:
         name: Rubocop 実行
         command: |
           bundle exec rubocop
-    - store_test_results:
-        path: test_results
-  frontend:
-    docker:
-    - image: circleci/node:12.16.2-stretch
-    steps:
-    - checkout
-    - run:
-        name: npm install
-        command: |
-          npm install
     - run:
         name: jest
         command: |
+          node -v
+          npm run test
+  build:
+    docker:
+    - image: circleci/ruby:2.6.5-node
+      environment:
+        RAILS_ENV: test
+        PGHOST: 127.0.0.1
+        PGUSER: postgres
+        PARALLEL_TEST_PROCESSORS: 3
+    - image: circleci/postgres:9.5-alpine
+    steps:
+    - checkout
+    - restore_cache:
+        name: Restoring Bundle Cache
+        key: cache-bundle-{{ checksum "Gemfile.lock" }}
+    - restore_cache:
+        name: Restoring Node Module Cache
+        key: cache-node_modules-{{ checksum "package-lock.json" }}
+    - run:
+        name: npm update
+        command: |
+          NODE_VERSION="v$(cat .node-version)"
+          curl -sSL "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-linux-x64.tar.xz" | sudo tar --strip-components=2 -xJ -C /usr/local/bin/ node-$NODE_VERSION-linux-x64/bin/node
+          curl -s https://www.npmjs.com/install.sh | sudo bash
+    - run:
+        name: Bundler install
+        command: |
+          gem update --system
+          gem install bundler -v 2.1.4
+    - run:
+        command: bundle install --jobs=3 --retry=3 --deployment --path=./vendor/bundle
+    - run:
+        name: npm のインストール
+        command: npm install
+    - save_cache:
+        name: Save Bundle Cache
+        key: cache-bundle-{{ checksum "Gemfile.lock" }}
+        paths:
+        - ./vendor/bundle
+    - save_cache:
+        name: Save Node Module Cache
+        key: cache-node_modules-{{ checksum "package-lock.json" }}
+        paths:
+        - ./node_modules
+  test:
+    docker:
+    - image: circleci/ruby:2.6.5-node
+      environment:
+        RAILS_ENV: test
+        PGHOST: 127.0.0.1
+        PGUSER: postgres
+        PARALLEL_TEST_PROCESSORS: 3
+    - image: circleci/postgres:9.5-alpine
+    steps:
+    - checkout
+    - restore_cache:
+        name: Restoring Bundle Cache
+        key: cache-bundle-{{ checksum "Gemfile.lock" }}
+    - restore_cache:
+        name: Restoring Node Module Cache
+        key: cache-node_modules-{{ checksum "package-lock.json" }}
+    - run:
+        name: Bundler install
+        command: |
+          gem update --system
+          gem install bundler -v 2.1.4
+    - run:
+        command: bundle install --jobs=3 --retry=3 --deployment --path=./vendor/bundle
+    - run:
+        name: データベースのセットアップ
+        command: bundle exec rake parallel:create parallel:migrate
+    - run:
+        name: RSpec 実行
+        command: |
+          bundle exec parallel_rspec --test-options '--order rand' spec
+  lint:
+    docker:
+    - image: circleci/ruby:2.6.5-node
+      environment:
+        RAILS_ENV: test
+        PGHOST: 127.0.0.1
+        PGUSER: postgres
+        PARALLEL_TEST_PROCESSORS: 3
+    - image: circleci/postgres:9.5-alpine
+    steps:
+    - checkout
+    - restore_cache:
+        name: Restoring Bundle Cache
+        key: cache-bundle-{{ checksum "Gemfile.lock" }}
+    - restore_cache:
+        name: Restoring Node Module Cache
+        key: cache-node_modules-{{ checksum "package-lock.json" }}
+    - run:
+        name: Bundler install
+        command: |
+          gem update --system
+          gem install bundler -v 2.1.4
+    - run:
+        command: bundle install --jobs=3 --retry=3 --deployment --path=./vendor/bundle
+    - run:
+        name: Rubocop 実行
+        command: |
+          bundle exec rubocop
+    - run:
+        name: jest
+        command: |
+          node -v
+          npm run test
+  merge_test:
+    docker:
+    - image: circleci/ruby:2.6.5-node
+      environment:
+        RAILS_ENV: test
+        PGHOST: 127.0.0.1
+        PGUSER: postgres
+        PARALLEL_TEST_PROCESSORS: 3
+    - image: circleci/postgres:9.5-alpine
+    steps:
+    - checkout
+    - run:
+        name: Checkout merged branch
+        command: |
+          if [[ -n "${CIRCLE_PULL_REQUEST}" ]]; then
+              # TODO: Any ways to get PR destination branch dynamically?
+              PR_DEST_BRANCH=master
+
+              # CIRCLE_PR_NUMBER is available only if PR is created from a fork (unavailable if created from a branch).
+              # So, manually construct it from CIRCLE_PULL_REQUEST environment variable.
+              CIRCLE_PR_NUMBER=$(basename "${CIRCLE_PULL_REQUEST}")
+
+              # Update PR refs for testing.
+              FETCH_REFS="+${PR_DEST_BRANCH}:${PR_DEST_BRANCH}"
+              FETCH_REFS="${FETCH_REFS} +refs/pull/${CIRCLE_PR_NUMBER}/head:pull/${CIRCLE_PR_NUMBER}/head"
+              FETCH_REFS="${FETCH_REFS} +refs/pull/${CIRCLE_PR_NUMBER}/merge:pull/${CIRCLE_PR_NUMBER}/merge"
+
+              # Retrieve the refs
+              echo "git fetch -u origin ${FETCH_REFS}"
+              git fetch -u origin ${FETCH_REFS}
+
+              # Checkout PR destination branch and merge PR head ref.
+              # If conflicts occur, exit with non-zero.
+              echo "git checkout ${PR_DEST_BRANCH}"
+              git checkout "${PR_DEST_BRANCH}"
+              git config user.name 'foo' # Need to configure something to git merge
+              git config user.email 'foo@example.com'
+              echo "git merge --no-commit \"pull/${CIRCLE_PR_NUMBER}/head\""
+              git merge --no-commit "pull/${CIRCLE_PR_NUMBER}/head"
+          fi
+    - restore_cache:
+        name: Restoring Bundle Cache
+        key: cache-bundle-{{ checksum "Gemfile.lock" }}
+    - restore_cache:
+        name: Restoring Node Module Cache
+        key: cache-node_modules-{{ checksum "package-lock.json" }}
+    - run:
+        name: Bundler install
+        command: |
+          gem update --system
+          gem install bundler -v 2.1.4
+    - run:
+        command: bundle install --jobs=3 --retry=3 --deployment --path=./vendor/bundle
+    - run:
+        name: データベースのセットアップ
+        command: bundle exec rake parallel:create parallel:migrate
+    - run:
+        name: RSpec 実行
+        command: |
+          bundle exec parallel_rspec --test-options '--order rand' spec
+    - run:
+        name: Rubocop 実行
+        command: |
+          bundle exec rubocop
+    - run:
+        name: jest
+        command: |
+          node -v
           npm run test
 workflows:
   version: 2
   build_and_spec:
     jobs:
+    - build_and_test
     - build
-    - frontend
+    - test:
+        requires:
+        - build
+    - lint:
+        requires:
+        - build
+    - merge_test:
+        filters:
+          branches:
+            ignore:
+            - master
+        requires:
+        - build
 
 # Original config.yml file:
 # version: 2.1
-# jobs:
-#   build:
+# executors:
+#   app:
 #     docker:
 #       - image: circleci/ruby:2.6.5-node
 #         environment:
-#           BUNDLE_JOBS: 3
-#           BUNDLE_RETRY: 3
-#           BUNDLE_PATH: vendor/bundle
-#           PGHOST: 127.0.0.1
-#           PGUSER: postgres
-#           RAILS_ENV: test
-#       - image: circleci/postgres:9.5-alpine # \u30C7\u30FC\u30BF\u30D9\u30FC\u30B9 \u30A4\u30E1\u30FC\u30B8
-#         environment: # \u30C7\u30FC\u30BF\u30D9\u30FC\u30B9\u306E\u74B0\u5883\u5909\u6570
-#           POSTGRES_USER: postgres
-#           POSTGRES_DB: ci_test_test
-#           POSTGRES_PASSWORD: \"password\"
+#             RAILS_ENV: test
+#             PGHOST: 127.0.0.1
+#             PGUSER: postgres
+#             PARALLEL_TEST_PROCESSORS: 3
+#       - image: circleci/postgres:9.5-alpine
+# 
+# commands:
+#   load_cache:
+#     description: Restore bundle and node
 #     steps:
-#       - checkout
+#       - restore_cache:
+#           name: Restoring Bundle Cache
+#           key: cache-bundle-{{ checksum \"Gemfile.lock\" }}
+#       - restore_cache:
+#           name: Restoring Node Module Cache
+#           key: cache-node_modules-{{ checksum \"package-lock.json\" }}
+#   dump_cache:
+#     description: Dump bundle and node
+#     steps:
+#       - save_cache:
+#           name: Save Bundle Cache
+#           key: cache-bundle-{{ checksum \"Gemfile.lock\" }}
+#           paths:
+#             - ./vendor/bundle
+#       - save_cache:
+#           name: Save Node Module Cache
+#           key: cache-node_modules-{{ checksum \"package-lock.json\" }}
+#           paths:
+#             - ./node_modules
+#   update_node:
+#     steps:
+#       - run:
+#           name: npm update
+#           command: |
+#             NODE_VERSION=\"v$(cat .node-version)\"
+#             curl -sSL \"https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-linux-x64.tar.xz\" | sudo tar --strip-components=2 -xJ -C /usr/local/bin/ node-$NODE_VERSION-linux-x64/bin/node
+#             curl -s https://www.npmjs.com/install.sh | sudo bash
+#   bundler_install:
+#     steps:
 #       - run:
 #           name: Bundler install
 #           command: |
 #             gem update --system
 #             gem install bundler -v 2.1.4
-#       - run: bundle -v
-#       - restore_cache:
-#           keys:
-#             - ci_test_2-{{ checksum \"Gemfile.lock\" }}
-# 
 #       - run: bundle install --jobs=3 --retry=3 --deployment --path=./vendor/bundle
-# 
-#       - save_cache:
-#           key: ci_test_2-{{ checksum \"Gemfile.lock\" }}
-#           paths:
-#             - .vendor/bundle
-# 
-# #      - restore_cache:
-# #          keys:
-# #            - rails-demo-yarn-{{ checksum \"yarn.lock\" }}
-# 
-# #      - run:
-# #          name: Yarn \u306E\u30A4\u30F3\u30B9\u30C8\u30FC\u30EB
-# #          command: yarn install --cache-folder ~/.cache/yarn
-# 
+#   setup_test:
+#     steps:
 #       - run:
 #           name: npm \u306E\u30A4\u30F3\u30B9\u30C8\u30FC\u30EB
 #           command: npm install
-# 
-#       - run:
-#           name: jest
-#           command: |
-#             npm run test
-# 
-# #      - save_cache:
-# #          key: rails-demo-yarn-{{ checksum \"yarn.lock\" }}
-# #          paths:
-# #            - ~/.cache/yarn
-# 
-#       - run:
-#           name: DB \u306E\u5F85\u6A5F
-#           command: dockerize -wait tcp://localhost:5432 -timeout 1m
-# 
+#   setup_db:
+#     steps:
 #       - run:
 #           name: \u30C7\u30FC\u30BF\u30D9\u30FC\u30B9\u306E\u30BB\u30C3\u30C8\u30A2\u30C3\u30D7
-#           command: bin/rails db:create db:schema:load --trace
+#           command: bundle exec rake parallel:create parallel:migrate
+#   checkout_merge:
+#     steps:
+#       - run:
+#           name: 'Checkout merged branch'
+#           command: |
+#             if [[ -n \"${CIRCLE_PULL_REQUEST}\" ]]; then
+#                 # TODO: Any ways to get PR destination branch dynamically?
+#                 PR_DEST_BRANCH=master
 # 
+#                 # CIRCLE_PR_NUMBER is available only if PR is created from a fork (unavailable if created from a branch).
+#                 # So, manually construct it from CIRCLE_PULL_REQUEST environment variable.
+#                 CIRCLE_PR_NUMBER=$(basename \"${CIRCLE_PULL_REQUEST}\")
+# 
+#                 # Update PR refs for testing.
+#                 FETCH_REFS=\"+${PR_DEST_BRANCH}:${PR_DEST_BRANCH}\"
+#                 FETCH_REFS=\"${FETCH_REFS} +refs/pull/${CIRCLE_PR_NUMBER}/head:pull/${CIRCLE_PR_NUMBER}/head\"
+#                 FETCH_REFS=\"${FETCH_REFS} +refs/pull/${CIRCLE_PR_NUMBER}/merge:pull/${CIRCLE_PR_NUMBER}/merge\"
+# 
+#                 # Retrieve the refs
+#                 echo \"git fetch -u origin ${FETCH_REFS}\"
+#                 git fetch -u origin ${FETCH_REFS}
+# 
+#                 # Checkout PR destination branch and merge PR head ref.
+#                 # If conflicts occur, exit with non-zero.
+#                 echo \"git checkout ${PR_DEST_BRANCH}\"
+#                 git checkout \"${PR_DEST_BRANCH}\"
+#                 git config user.name 'foo' # Need to configure something to git merge
+#                 git config user.email 'foo@example.com'
+#                 echo \"git merge --no-commit \\\"pull/${CIRCLE_PR_NUMBER}/head\\\"\"
+#                 git merge --no-commit \"pull/${CIRCLE_PR_NUMBER}/head\"
+#             fi
+#   rspec:
+#     steps:
 #       - run:
 #           name: RSpec \u5B9F\u884C
 #           command: |
-#             bundle exec rspec
-# 
+#             bundle exec parallel_rspec --test-options '--order rand' spec
+#   lint:
+#     steps:
 #       - run:
 #           name: Rubocop \u5B9F\u884C
 #           command: |
 #             bundle exec rubocop
-# 
-#       - store_test_results: # \u30C6\u30B9\u30C8 \u30B5\u30DE\u30EA\u30FC (https://circleci.com/ja/docs/2.0/collect-test-data/) \u306B\u8868\u793A\u3059\u308B\u30C6\u30B9\u30C8\u7D50\u679C\u3092\u30A2\u30C3\u30D7\u30ED\u30FC\u30C9\u3057\u307E\u3059
-#           path: test_results
-#   frontend:
-#     docker:
-#       - image: circleci/node:12.16.2-stretch
+#   jest:
 #     steps:
-#       - checkout
-#       - run:
-#           name: npm install
-#           command: |
-#             npm install
 #       - run:
 #           name: jest
 #           command: |
+#             node -v
 #             npm run test
+# 
+# jobs:
+#   build_and_test: # \u30ED\u30FC\u30AB\u30EB\u3067\u5168\u90E8\u5B9F\u884C\u7528
+#     executor: app
+#     steps:
+#       - checkout
+#       - load_cache
+#       - update_node
+#       - bundler_install
+#       - setup_test
+#       - dump_cache
+#       - setup_db
+#       - rspec
+#       - lint
+#       - jest
+#   build:
+#     executor: app
+#     steps:
+#       - checkout
+#       - load_cache
+#       - update_node
+#       - bundler_install
+#       - setup_test
+#       - dump_cache
+#   test:
+#     executor: app
+#     steps:
+#       - checkout
+#       - load_cache
+#       - bundler_install
+#       - setup_db
+#       - rspec
+#   lint:
+#     executor: app
+#     steps:
+#       - checkout
+#       - load_cache
+#       - bundler_install
+#       - lint
+#       - jest
+#   merge_test:
+#     executor: app
+#     steps:
+#       - checkout
+#       - checkout_merge
+#       - load_cache
+#       - bundler_install
+#       - setup_db
+#       - rspec
+#       - lint
+#       - jest
 # 
 # workflows:
 #   version: 2
 #   build_and_spec:
 #     jobs:
+#       - build_and_test
 #       - build
-#       - frontend
+#       - test:
+#           requires:
+#             - build
+#       - lint:
+#           requires:
+#             - build
+#       - merge_test:
+#           requires:
+#             - build
+#           filters:
+#             branches:
+#               ignore:
+#                 - master
